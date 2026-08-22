@@ -89,6 +89,10 @@ alter table purchase_orders add column if not exists rejection_reason text;
 
 ## Getting started
 
+> **Deploying instead of running locally?** See [`DEPLOYMENT.md`](./DEPLOYMENT.md)
+> for step-by-step GitHub + Cloudflare Pages (frontend) + Railway/Render
+> (backend) instructions.
+
 ### 1. Create your Supabase project
 
 1. Go to [supabase.com](https://supabase.com) and create a new project.
