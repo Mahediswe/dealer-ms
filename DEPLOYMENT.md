@@ -1,83 +1,94 @@
-# Deploying Dealer OS
+# Deploying Dealer OS (Vercel — frontend + backend)
 
-This project has two parts that deploy separately:
+Both the frontend and backend deploy to Vercel as **two separate projects**
+from the same GitHub repo (one pointed at `/frontend`, one at `/backend`).
+Database stays on Supabase (already set up).
 
-- **Frontend** (`/frontend`) — static React build → **Cloudflare Pages**
-- **Backend** (`/backend`) — Node/Express API → **Railway**, **Render**, or **Fly.io**
-  (Cloudflare Pages only serves static files / edge Workers, it cannot run a
-  plain Express server, so the API needs a normal Node host)
-- **Database** — Supabase (already covered in the main README)
+> **Trade-off to know:** Vercel runs the backend as serverless functions —
+> each request spins up independently rather than one process staying alive
+> all the time. Everything works normally (dealers, sales, inventory,
+> payments, reports, etc.) **except real-time notifications** (the live bell
+> icon updates) — those need a persistent Socket.IO connection, which
+> serverless doesn't support. The rest of the app is unaffected; new
+> notifications still get created, you just won't see them pop up live
+> without a page refresh.
 
-## 1. Push this project to GitHub
+## 1. Push to GitHub
 
-The project is already a git repo with one commit. From the project root:
+If you haven't already:
 
 ```bash
-# Create a new empty repo on GitHub first (github.com/new), then:
+cd dms
 git remote add origin https://github.com/<your-username>/dealer-os.git
 git branch -M main
 git push -u origin main
 ```
 
-If you use SSH instead of HTTPS, use `git@github.com:<your-username>/dealer-os.git`.
+## 2. Deploy the backend on Vercel
 
-## 2. Deploy the backend first (Railway — easiest)
+1. Go to [vercel.com](https://vercel.com) → sign in with GitHub.
+2. **Add New...** → **Project** → import your `dealer-os` repo.
+3. On the configuration screen:
+   - **Root Directory** → click **Edit** → select `backend`
+   - **Framework Preset** → leave as **Other** (it's a plain Node/Express app,
+     not a framework Vercel needs to special-case)
+4. Expand **Environment Variables** and add:
 
-1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
-   → pick your `dealer-os` repo.
-2. When it asks for the root directory, set it to **`backend`**.
-3. Railway auto-detects Node. Set these environment variables in the Railway
-   dashboard (same values as your local `backend/.env`):
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `JWT_SECRET`
-   - `JWT_EXPIRES_IN` = `7d`
-   - `CLIENT_URL` = your Cloudflare Pages URL (add this **after** step 3, e.g.
-     `https://dealer-os.pages.dev`)
-   - `NODE_ENV` = `production`
-4. Railway gives you a public URL like `https://dealer-os-backend.up.railway.app`.
-   Keep this — the frontend needs it.
+   | Name | Value |
+   |---|---|
+   | `SUPABASE_URL` | your Supabase Project URL |
+   | `SUPABASE_SERVICE_ROLE_KEY` | your Supabase service_role (or `secret`) key |
+   | `JWT_SECRET` | any long random string you make up |
+   | `JWT_EXPIRES_IN` | `7d` |
+   | `NODE_ENV` | `production` |
+   | `CLIENT_URL` | `*` for now — you'll set this properly in step 4 |
 
-(Render.com works the same way: New → Web Service → connect repo → root
-directory `backend` → build command `npm install` → start command `npm start`.)
+5. Click **Deploy**. Wait for it to finish, then copy the URL Vercel gives
+   you, e.g. `https://dealer-os-backend.vercel.app`.
+6. Test it: open `https://dealer-os-backend.vercel.app/api/health` in your
+   browser. You should see `{"status":"ok",...}`.
 
-## 3. Deploy the frontend to Cloudflare Pages
+## 3. Deploy the frontend on Vercel
 
-1. Go to the [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers &
-   Pages** → **Create** → **Pages** → **Connect to Git** → pick your `dealer-os`
-   repo.
-2. Set the build configuration:
-   - **Framework preset:** Vite
-   - **Root directory:** `frontend`
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-3. Add an environment variable:
-   - `VITE_API_URL` = `https://dealer-os-backend.up.railway.app/api`
-     (your Railway URL from step 2, with `/api` at the end)
-4. Click **Save and Deploy**. Cloudflare gives you a URL like
-   `https://dealer-os.pages.dev`.
-5. Go back to Railway and set `CLIENT_URL` to that exact Pages URL (so CORS
-   allows it), then redeploy the backend.
+1. Back on the Vercel dashboard: **Add New...** → **Project** → import the
+   **same** `dealer-os` repo again (Vercel lets you import a repo more than
+   once, as separate projects).
+2. On the configuration screen:
+   - **Root Directory** → **Edit** → select `frontend`
+   - **Framework Preset** → should auto-detect as **Vite**
+3. Expand **Environment Variables** and add:
 
-## 4. First login
+   | Name | Value |
+   |---|---|
+   | `VITE_API_URL` | your backend URL + `/api`, e.g. `https://dealer-os-backend.vercel.app/api` |
 
-Open your `*.pages.dev` URL, click **Create an account**, and set up your
-company. From there everything works exactly like it did locally.
+4. Click **Deploy**. When it finishes you'll get a URL like
+   `https://dealer-os.vercel.app` — that's your live app.
 
-## Custom domain (optional)
+## 4. Connect the two (CORS)
 
-In Cloudflare Pages → your project → **Custom domains**, add your domain (it
-must already be on Cloudflare DNS). Do the same for the backend on Railway/
-Render under their custom domain settings if you want `api.yourdomain.com`
-instead of the default subdomain.
+1. Go back to the **backend** project on Vercel → **Settings** →
+   **Environment Variables**.
+2. Edit `CLIENT_URL`, replace `*` with your actual frontend URL, e.g.
+   `https://dealer-os.vercel.app`.
+3. Go to **Deployments** tab → click the **⋮** on the latest deployment →
+   **Redeploy** (env var changes need a redeploy to take effect).
 
-## Notes
+## 5. First login
 
-- Every `git push` to `main` auto-redeploys both Cloudflare Pages and Railway/
-  Render — no manual redeploy needed after the first setup.
-- Don't commit `.env` files — they're already git-ignored. Set secrets only in
-  the Railway/Cloudflare dashboards.
-- If you'd rather run the backend on Cloudflare too, it needs to be rewritten
-  against the Workers runtime (e.g. with Hono instead of Express, and
-  Supabase's edge-compatible client) — that's a real rewrite, not a config
-  change, so Railway/Render is the fast path.
+Open your frontend URL (`https://dealer-os.vercel.app`), click **Create an
+account**, fill in your company name and your details. That becomes your
+first `super_admin` login.
+
+## Updating later
+
+Every `git push` to `main` auto-redeploys **both** Vercel projects — nothing
+manual needed after this first setup.
+
+## If you want real-time notifications too
+
+That needs a host that keeps a process alive (Railway, Render, Fly.io, or a
+VPS) instead of serverless. The same `backend` folder works as-is on any of
+those — just point them at `src/server.js` (via `npm start`) instead of the
+`api/` folder Vercel uses. You'd then only need to swap which service the
+frontend's `VITE_API_URL` points to.
