@@ -68,19 +68,11 @@
 
 
 
-
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
+import { BYPASS_AUTH } from '../lib/config';
 
 const AuthContext = createContext(null);
-
-// Bypass mode: when VITE_BYPASS_AUTH=true, the login/register screens are
-// skipped entirely and everyone is silently signed in as a shared demo
-// account (auto-created by the backend on first use). To restore normal
-// login later, remove this env var from the frontend Vercel project (and
-// BYPASS_AUTH from the backend project), then redeploy both — no code
-// changes needed.
-const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
